@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estudio 3D Pro - Capas y Audio</title>
+    <style>
+        :root {
+            --bg-dark: #121212; --panel-bg: #1e1e1e; --accent: #ff9f43; 
+            --text: #e0e0e0; --danger: #ff4757; --success: #2ed573; --info: #3742fa;
+        }
+        body { margin: 0; overflow: hidden; background-color: var(--bg-dark); font-family: 'Segoe UI', system-ui, sans-serif; color: var(--text); user-select: none; }
+        
+        #top-bar { position: absolute; top: 0; left: 0; width: 100%; height: 50px; background: #151515; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        .logo { font-size: 18px; font-weight: bold; color: var(--accent); letter-spacing: 1px; }
+        
+        .panel { position: absolute; top: 60px; background: rgba(30, 30, 30, 0.95); padding: 15px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px); }
+        #left-panel { left: 10px; width: 230px; bottom: 80px; overflow-y: auto; }
+        #right-panel { right: 10px; width: 250px; max-height: 85vh; overflow-y: auto; }
+        #timeline-panel { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(20, 20, 20, 0.95); padding: 10px 20px; border-radius: 30px; border: 1px solid #444; display: flex; gap: 12px; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.8); z-index: 100; }
+
+        h3 { margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .section { margin-bottom: 20px; }
+        
+        button { background: #333; color: white; border: 1px solid #555; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; width: 100%; font-weight: bold; display: flex; justify-content: center; align-items: center; gap: 5px;}
+        button:hover { background: #444; border-color: var(--accent); }
+        button.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        
+        .btn-play { background: var(--success); border-color: var(--success); color: #000; }
+        .btn-play:hover { background: #26b963; }
+        .btn-record { background: var(--danger); border-color: var(--danger); color: white;}
+        .btn-record.recording { animation: pulse 1s infinite; }
+        .btn-add-frame { background: var(--info); border-color: var(--info); color: white;}
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 71, 87, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); } }
+
+        input[type="color"] { border: none; width: 100%; height: 35px; border-radius: 6px; cursor: pointer; background: #333; padding: 2px; }
+        input[type="file"] { display: none; }
+        .file-label { background: #333; border: 1px dashed #666; padding: 10px; border-radius: 6px; text-align: center; cursor: pointer; display: block; font-size: 12px; color: #aaa; transition: 0.2s; margin-bottom: 8px;}
+        .file-label:hover { border-color: var(--accent); color: white; background: #444; }
+        #frame-counter { font-family: 'Courier New', monospace; font-size: 16px; font-weight: bold; color: var(--accent); background: #000; padding: 6px 15px; border-radius: 20px; border: 1px solid #333; }
+        #audio-status { font-size: 11px; color: var(--success); text-align: center; display: none; margin-top: -5px; margin-bottom: 10px;}
+
+        /* ESTILOS DEL PANEL DE CAPAS (NUEVO) */
+        #scene-list { background: #111; border-radius: 6px; padding: 4px; max-height: 150px; overflow-y: auto; border: 1px solid #333; }
+        .list-item { padding: 8px 10px; margin-bottom: 2px; background: #222; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; border-left: 3px solid transparent;}
+        .list-item:hover { background: #333; }
+        .list-item.active { background: #333; border-left-color: var(--accent); color: var(--accent); font-weight: bold; }
+        .list-visibility { cursor: pointer; opacity: 0.5; padding: 0 5px; }
+        .list-visibility:hover { opacity: 1; transform: scale(1.2); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div class="logo">🎬 STUDIO 3D PRO (Capas y Audio)</div>
+        <div style="font-size: 12px; color: #888;">Cámara: Click Dcho (Mover) / Click Izq (Rotar) / Rueda (Zoom)</div>
+    </div>
+
+    <!-- PANEL IZQUIERDO: ARCHIVOS -->
+    <div id="left-panel" class="panel">
+        <div class="section">
+            <h3>Archivos Media</h3>
+            <label class="file-label">🖼️ Cambiar Fondo <input type="file" id="bg-upload" accept="image/*"></label>
+            <label class="file-label" style="border-color: var(--success);">🎵 Añadir Música (.mp3) <input type="file" id="audio-upload" accept="audio/*"></label>
+            <div id="audio-status">♫ Música cargada</div>
+        </div>
+        <div class="section">
+            <h3>Atrezo (Objetos)</h3>
+            <label class="file-label">📦 Añadir Imágenes (PNG) <input type="file" id="prop-upload" accept="image/*" multiple></label>
+        </div>
+        <div class="section">
+            <h3>Pintura Actor</h3>
+            <input type="color" id="colorPicker" value="#ff9f43">
+        </div>
+    </div>
+
+    <!-- PANEL DERECHO: HERRAMIENTAS Y CAPAS -->
+    <div id="right-panel" class="panel">
+        <!-- NUEVO: PANEL DE CAPAS -->
+        <div class="section">
+            <h3>Lista de Escena (Capas)</h3>
+            <div id="scene-list">
+                <!-- El jugador se añade por código aquí -->
+            </div>
+            <p style="font-size: 10px; color: #777; margin-top: 5px;">Si no puedes seleccionar algo, haz clic en su nombre arriba.</p>
+        </div>
+
+        <div class="section">
+            <h3>Mover y Ajustar</h3>
+            <div style="display: flex; gap: 5px;">
+                <button id="btn-translate" class="active" onclick="setMode('translate')">⬌</button>
+                <button id="btn-rotate" onclick="setMode('rotate')">↻</button>
+                <button id="btn-scale" onclick="setMode('scale')">⤡</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Acciones del Objeto</h3>
+            <div style="display: flex; gap: 5px;">
+                <button onclick="toggleVisibility()" style="background: #333;">👁️ Ocultar</button>
+                <button onclick="deleteSelected()" style="background: rgba(255, 71, 87, 0.2); border-color: var(--danger); color: var(--danger);">🗑️ Borrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div id="timeline-panel">
+        <button id="btn-add-frame" class="btn-add-frame">📸 Guardar Foto-grama</button>
+        <div id="frame-counter">000</div>
+        <button id="btn-play" class="btn-play">▶ Play Película</button>
+        <button id="btn-record" class="btn-record">⏺ Grabar Video</button>
+        <button id="btn-reset" onclick="resetAnimation()">⏮ Reiniciar</button>
+    </div>
+
+    <script>
+        // === 1. MOTOR 3D ===
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1e272e);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 12);
+        camera.userData.isCamera = true; 
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const orbit = new THREE.OrbitControls(camera, renderer.domElement);
+        orbit.target.set(0, 2, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 15);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
+        scene.add(new THREE.GridHelper(200, 200, 0x333333, 0x222222));
+
+        // === 2. AUDIO ===
+        const audioEl = new Audio();
+        let audioCtx, audioSource, audioDest, hasAudio = false;
+        document.getElementById('audio-upload').addEventListener('change', function(e) {
+            if(e.target.files[0]) {
+                audioEl.src = URL.createObjectURL(e.target.files[0]);
+                document.getElementById('audio-status').style.display = 'block';
+                hasAudio = true;
+                if(!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    audioSource = audioCtx.createMediaElementSource(audioEl);
+                    audioDest = audioCtx.createMediaStreamDestination();
+                    audioSource.connect(audioDest);
+                    audioSource.connect(audioCtx.destination);
+                }
+            }
+        });
+
+        // === 3. SELECCIÓN, CAPAS Y OBJETOS ===
+        let animatableObjects = [camera]; 
+        let interactables =[];
+        let selectedObject = null;
+        let propCount = 0;
+
+        const transformControl = new THREE.TransformControls(camera, renderer.domElement);
+        scene.add(transformControl);
+        transformControl.addEventListener('dragging-changed', e => orbit.enabled = !e.value);
+
+        window.setMode = function(mode) {
+            transformControl.setMode(mode);
+            document.getElementById('btn-translate').classList.remove('active');
+            document.getElementById('btn-rotate').classList.remove('active');
+            document.getElementById('btn-scale').classList.remove('active');
+            document.getElementById('btn-' + mode).classList.add('active');
+        }
+
+        // FUNCIÓN GLOBAL DE SELECCIÓN DE CAPAS
+        window.selectObject = function(obj) {
+            document.querySelectorAll('.list-item').forEach(el => el.classList.remove('active'));
+            if(!obj || !obj.visible) {
+                transformControl.detach();
+                selectedObject = null;
+                return;
+            }
+            transformControl.attach(obj);
+            selectedObject = obj;
+            
+            const elId = obj.userData.isCharacterGroup ? 'list-character' : 'list-' + obj.uuid;
+            const el = document.getElementById(elId);
+            if(el) el.classList.add('active');
+        }
+
+        // Construir Actor
+        const character = new THREE.Group();
+        character.userData.isCharacterGroup = true;
+        function createPart(geo, color, x, y, z) {
+            const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
+            mesh.position.set(x, y, z); mesh.castShadow = true; mesh.userData.isCharacterPart = true;
+            character.add(mesh); interactables.push(mesh);
+        }
+        createPart(new THREE.BoxGeometry(1.5, 2, 1), 0xdddddd, 0, 1.5, 0); 
+        createPart(new THREE.SphereGeometry(0.8, 32, 32), 0xffccaa, 0, 3.2, 0); 
+        createPart(new THREE.BoxGeometry(0.5, 1.5, 0.5), 0x555555, -1.1, 1.5, 0); 
+        createPart(new THREE.BoxGeometry(0.5, 1.5, 0.5), 0x555555, 1.1, 1.5, 0); 
+        createPart(new THREE.BoxGeometry(0.6, 1.5, 0.6), 0xff9f43, -0.4, -0.25, 0); 
+        createPart(new THREE.BoxGeometry(0.6, 1.5, 0.6), 0xff9f43, 0.4, -0.25, 0); 
+        character.position.y = 1; scene.add(character);
+        animatableObjects.push(character);
+
+        // Añadir Actor a la Lista de Capas
+        const listContainer = document.getElementById('scene-list');
+        listContainer.innerHTML = `
+            <div class="list-item" id="list-character" onclick="selectObject(character)">
+                <span>🧑 Actor Principal</span>
+                <span class="list-visibility" id="eye-character" onclick="event.stopPropagation(); toggleVisibility(character)">👁️</span>
+            </div>
+        `;
+        selectObject(character); // Seleccionar por defecto
+
+        // Subir Fondo
+        document.getElementById('bg-upload').addEventListener('change', e => {
+            if(e.target.files[0]) new THREE.TextureLoader().load(URL.createObjectURL(e.target.files[0]), tex => scene.background = tex);
+        });
+
+        // Subir Atrezo
+        document.getElementById('prop-upload').addEventListener('change', e => {
+            for(let file of e.target.files) {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = function() {
+                    propCount++;
+                    const aspect = img.width / img.height;
+                    const texture = new THREE.Texture(img); texture.needsUpdate = true;
+                    const mat = new THREE.MeshStandardMaterial({ map: texture, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide });
+                    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(5 * aspect, 5), mat);
+                    mesh.position.set(Math.random() * 4 - 2, 2.5, Math.random() * -5 - 2);
+                    mesh.castShadow = true; mesh.userData.isScenery = true; mesh.name = "Imagen " + propCount;
+                    
+                    scene.add(mesh); interactables.push(mesh); animatableObjects.push(mesh); 
+                    
+                    // Añadir como "Oculto" al pasado para no romper la animación
+                    const initialState = { pos: mesh.position.clone(), rot: mesh.quaternion.clone(), scale: mesh.scale.clone(), visible: false };
+                    keyframes.forEach(frame => frame[mesh.uuid] = initialState);
+
+                    // AÑADIR A LA LISTA DE CAPAS
+                    const item = document.createElement('div');
+                    item.className = 'list-item'; item.id = 'list-' + mesh.uuid;
+                    item.onclick = () => selectObject(mesh);
+                    
+                    const text = document.createElement('span'); text.innerText = "🖼️ " + mesh.name;
+                    const eye = document.createElement('span'); eye.className = 'list-visibility'; eye.id = 'eye-' + mesh.uuid; eye.innerText = '👁️';
+                    eye.onclick = (ev) => { ev.stopPropagation(); toggleVisibility(mesh); };
+                    
+                    item.appendChild(text); item.appendChild(eye);
+                    listContainer.appendChild(item);
+
+                    selectObject(mesh); // Seleccionar la nueva imagen automáticamente
+                }
+                img.src = url;
+            }
+        });
+
+        // FUNCIONES DE EDICIÓN: Ocultar y Borrar
+        window.toggleVisibility = function(targetObj) {
+            const obj = targetObj || selectedObject;
+            if(obj && obj !== camera) {
+                obj.visible = !obj.visible;
+                if(!obj.visible && selectedObject === obj) selectObject(null);
+                const eyeObj = obj.userData.isCharacterGroup ? document.getElementById('eye-character') : document.getElementById('eye-' + obj.uuid);
+                if(eyeObj) eyeObj.innerText = obj.visible ? "👁️" : "❌";
+            }
+        }
+
+        window.deleteSelected = function() {
+            if(selectedObject && selectedObject !== camera && selectedObject !== character) {
+                scene.remove(selectedObject);
+                interactables = interactables.filter(obj => obj !== selectedObject);
+                animatableObjects = animatableObjects.filter(obj => obj !== selectedObject);
+                keyframes.forEach(frame => delete frame[selectedObject.uuid]);
+                
+                const el = document.getElementById('list-' + selectedObject.uuid);
+                if(el) el.remove();
+                selectObject(null);
+            } else {
+                alert("No puedes borrar al actor o la cámara. (Usa el botón ocultar si no quieres que se vean)");
+            }
+        }
+
+        // RAYCASTER INTELIGENTE (Solución de colisiones de PNGs transparentes)
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        window.addEventListener('mousedown', (event) => {
+            if(event.target.tagName !== 'CANVAS') return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            
+            if (!transformControl.dragging) {
+                const visibles = interactables.filter(obj => obj.visible || obj.parent.visible);
+                const intersects = raycaster.intersectObjects(visibles);
+                
+                if (intersects.length > 0) {
+                    let hit = intersects[0].object;
+                    
+                    // CLICK-THROUGH: Si el click bloquea al actor con una imagen ya seleccionada, atraviesa la imagen.
+                    if (hit === selectedObject && hit.userData.isScenery && intersects.length > 1) {
+                        hit = intersects[1].object;
+                    }
+
+                    if (hit.userData.isCharacterPart) {
+                        selectObject(character);
+                        hit.material.color.set(document.getElementById('colorPicker').value);
+                    } else if (hit.userData.isScenery) {
+                        selectObject(hit);
+                    }
+                } else {
+                    selectObject(null); // Click al vacío suelta el objeto
+                }
+            }
+        });
+
+        // === 4. ANIMACIÓN Y GRABACIÓN ===
+        let keyframes =[], isPlaying = false, isRecording = false, playTime = 0, timePerFrame = 2.0; 
+        let mediaRecorder, recordedChunks =[];
+
+        document.getElementById('btn-add-frame').addEventListener('click', () => {
+            const frameData = {};
+            animatableObjects.forEach(obj => {
+                frameData[obj.uuid] = { pos: obj.position.clone(), rot: obj.quaternion.clone(), scale: obj.scale ? obj.scale.clone() : new THREE.Vector3(1,1,1), visible: obj.visible };
+            });
+            keyframes.push(frameData);
+            document.getElementById('frame-counter').innerText = keyframes.length.toString().padStart(3, '0');
+        });
+
+        window.resetAnimation = function() {
+            isPlaying = false;
+            if(hasAudio) { audioEl.pause(); audioEl.currentTime = 0; }
+            if(keyframes.length > 0) applyFrame(keyframes[0]);
+            if(selectedObject && selectedObject.visible) selectObject(selectedObject);
+            orbit.enabled = true;
+        }
+
+        function applyFrame(frameData) {
+            animatableObjects.forEach(obj => {
+                if(frameData[obj.uuid]) {
+                    obj.position.copy(frameData[obj.uuid].pos); obj.quaternion.copy(frameData[obj.uuid].rot);
+                    if(obj.scale) obj.scale.copy(frameData[obj.uuid].scale);
+                    obj.visible = frameData[obj.uuid].visible;
+                    
+                    // Actualizar iconos de ojo
+                    const eye = document.getElementById(obj.userData.isCharacterGroup ? 'eye-character' : 'eye-' + obj.uuid);
+                    if(eye) eye.innerText = obj.visible ? "👁️" : "❌";
+                }
+            });
+        }
+
+        function startPlayback() {
+            if(keyframes.length < 2) return alert("Captura al menos 2 fotogramas.");
+            isPlaying = true; playTime = 0; transformControl.detach(); orbit.enabled = false;
+            if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if(hasAudio) { audioEl.currentTime = 0; audioEl.play(); }
+            return true;
+        }
+
+        document.getElementById('btn-play').addEventListener('click', startPlayback);
+        document.getElementById('btn-record').addEventListener('click', () => {
+            if(startPlayback()) {
+                isRecording = true; recordedChunks =[];
+                const btn = document.getElementById('btn-record'); btn.classList.add('recording'); btn.innerHTML = "⏺ Grabando...";
+
+                const canvasStream = renderer.domElement.captureStream(60);
+                let finalStream = canvasStream;
+                if(hasAudio && audioDest && audioDest.stream.getAudioTracks()[0]) {
+                    finalStream = new MediaStream([...canvasStream.getTracks(), audioDest.stream.getAudioTracks()[0]]);
+                }
+
+                mediaRecorder = new MediaRecorder(finalStream, { mimeType: 'video/webm' });
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Pelicula_Final.webm'; a.click();
+                    btn.classList.remove('recording'); btn.innerHTML = "⏺ Grabar Video";
+                };
+                mediaRecorder.start();
+            }
+        });
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if(!isPlaying) orbit.update(); 
+
+            if (isPlaying && keyframes.length > 1) {
+                playTime += delta; const totalDuration = (keyframes.length - 1) * timePerFrame;
+                if (playTime >= totalDuration) {
+                    playTime = totalDuration; isPlaying = false; orbit.enabled = true;
+                    if(hasAudio) audioEl.pause();
+                    if(isRecording) { mediaRecorder.stop(); isRecording = false; }
+                    applyFrame(keyframes[keyframes.length - 1]);
+                } else {
+                    const currentIndex = Math.floor(playTime / timePerFrame), nextIndex = currentIndex + 1;
+                    const progress = (playTime % timePerFrame) / timePerFrame, smoothProgress = progress * progress * (3 - 2 * progress); 
+
+                    animatableObjects.forEach(obj => {
+                        const stateA = keyframes[currentIndex][obj.uuid], stateB = keyframes[nextIndex][obj.uuid];
+                        if(stateA && stateB) {
+                            obj.position.lerpVectors(stateA.pos, stateB.pos, smoothProgress);
+                            obj.quaternion.slerpQuaternions(stateA.rot, stateB.rot, smoothProgress);
+                            if(obj.scale) obj.scale.lerpVectors(stateA.scale, stateB.scale, smoothProgress);
+                            obj.visible = stateA.visible; 
+                        }
+                    });
+                }
+            }
+            renderer.render(scene, camera);
+        }
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+        animate();
+    </script>
+</body>
+</html>
